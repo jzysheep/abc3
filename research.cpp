@@ -6,7 +6,7 @@
 
 
 
-struct Datetime() {
+struct Datetime {
     std::chrono::sys_seconds datetime;
     Datetime(int year,
              int month,
@@ -14,12 +14,12 @@ struct Datetime() {
              int hour,
              int minute,
              int second)
-        : timestamp_(
+        : datetime(
               // 1. Create the date part (sys_days) using C++20 calendar types
               std::chrono::sys_days{
                   std::chrono::year{year} / 
-                  std::chrono::month{month} / 
-                  std::chrono::day{day}
+                  std::chrono::month{static_cast<unsigned int>(month)} / 
+                  std::chrono::day{static_cast<unsigned int>(day)}
               } 
               // 2. Add time durations
               + std::chrono::hours{hour} 
@@ -28,6 +28,8 @@ struct Datetime() {
           ) {
 
         }
+
+    Datetime() {}
 
     int year() const {
         // 1. Cast down to days (required for calendar conversions)
@@ -43,14 +45,14 @@ struct Datetime() {
     int month() const {
         auto days = std::chrono::floor<std::chrono::days>(datetime);
         std::chrono::year_month_day ymd{days};
-        return static_cast<int>(ymd.month());
+        return static_cast<unsigned>(ymd.month());
     }
 
 
     int day() const {
         auto days = std::chrono::floor<std::chrono::days>(datetime);
         std::chrono::year_month_day ymd{days};
-        return static_cast<int>(ymd.day());
+        return static_cast<unsigned>(ymd.day());
     }
 
     int hour() const {
@@ -58,7 +60,7 @@ struct Datetime() {
         auto day_point = std::chrono::floor<std::chrono::days>(datetime);
         
         // 2. Subtract the day portion to get the time passed since midnight
-        auto time_of_day = std::chrono::hh_mm_ss{m_timestamp - day_point};
+        auto time_of_day = std::chrono::hh_mm_ss{datetime - day_point};
         
         // 3. Return the hours component
         return time_of_day.hours().count();
@@ -67,14 +69,14 @@ struct Datetime() {
 
     int minutes() const {
         auto day_point = std::chrono::floor<std::chrono::days>(datetime);
-        auto time_of_day = std::chrono::hh_mm_ss{m_timestamp - day_point};
+        auto time_of_day = std::chrono::hh_mm_ss{datetime - day_point};
         return time_of_day.minutes().count();
     } 
 
 
     int seconds() const {
         auto day_point = std::chrono::floor<std::chrono::days>(datetime);
-        auto time_of_day = std::chrono::hh_mm_ss{m_timestamp - day_point};
+        auto time_of_day = std::chrono::hh_mm_ss{datetime - day_point};
         return time_of_day.seconds().count();
     } 
 
@@ -82,7 +84,7 @@ struct Datetime() {
         return datetime.time_since_epoch().count();
     }
 
-}
+};
 
 struct Candle {
     double open;
@@ -91,7 +93,24 @@ struct Candle {
     double low;
     int volume;
     Datetime datetime;
-   
+    
+    Candle(double open,
+           double close,
+           double high,
+           double low,
+           int volume,
+           int year,
+           int month,
+           int day,
+           int hour,
+           int minute) {
+        this->open = open;
+        this->close = close;
+        this->high = high;
+        this->low = low;
+        this->volume = volume;
+        this->datetime = Datetime(year, month, day, hour, minute, 0);
+    }  
      
 };
 
@@ -152,10 +171,10 @@ int main(int argc, char* argv[]) {
         } else if (args[i] == "-v" || args[i] == "--verbose") {
             verbose = true;
         } else if (args[i] == "--nn_index") {
-            nyse_and_nasdaq_index  = stoi(++i);
+            nyse_and_nasdaq_index  = std::stoi(args[++i]);
         }
    
-    
+    }    
      
      
 
