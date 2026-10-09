@@ -5,6 +5,8 @@
 #include <chrono>
 #include <numeric>
 
+#include "pattern.h"
+
 using namespace std;
 
 struct Datetime {
@@ -154,6 +156,28 @@ MyData loadFromBinary(const std::string& filename) {
 */
 
 
+int bull_win = 0;
+int bull_lose = 0;
+int bear_win = 0;
+int bear_lose = 0;
+double bull_profit = 0;
+double bear_profit = 0;
+int bull_trade_time = 0;
+int bear_trade_time = 0;
+
+int global_trade_id = 1;
+
+struct Trade {
+    string symbol;
+    int id;
+    Datetime time;
+    double price;
+    bool bull;
+    bool open;
+    double delta;
+    double target;
+};
+
 std::vector<double> calculateEMA(const std::vector<double>& data, int period) {
     if (data.empty() || period <= 0) return {};
     
@@ -291,7 +315,7 @@ bool is_daylight_savings1(const Datetime & datetime) {
 
 
 
-void analyze_symbol(string calc_mode) {
+void analyze_symbol(string calc_mode, vector<Trade> & global_trades, const string & symbol) {
     vector<Candle> sorted_day_candles;
     vector<Candle> sorted_hour_candles;
     vector<Candle> sorted_five_min_candles;
@@ -337,6 +361,12 @@ void analyze_symbol(string calc_mode) {
     int h = 0;
     int d = 0;
     bool first_time_calculate_ema = true;
+
+
+    int symbol_win = 0;
+    int symbol_lose = 0;
+    double symbol_profit = 0;
+    int symbol_trade_time = 0;
 
     while (i < sorted_one_min_candles.size()) {
         int h0 = h;
@@ -449,6 +479,82 @@ void analyze_symbol(string calc_mode) {
             }
         }
 
+        auto no_day_cross_ret = no_day_cross(true);
+        if (no_day_cross_ret.hit) {
+            Trade open_trade;
+            open_trade.symbol = symbol;
+            open_trade.id = global_trade_id;
+            open_trade.time = current_time;
+            open_trade.price = sorted_one_min_candles[i].close;
+            open_trade.bull = true;
+            open_trade.open = true;
+            open_trade.delta = no_day_cross_ret.delta;
+            open_trade.target = no_day_cross_ret.target;
+            
+            double i_price = sorted_one_min_candles[i].close;
+            global_trades.push_back(open_trade);
+           
+            int j = i + 1;
+            while (j < sorted_one_min_candles.size()) {
+                double j_price = sorted_one_min_candles[j].close;
+                bool win_target_reached = false;
+                bool lose_target_reached = false;
+                if (j_price > no_day_cross_ret.target) {
+                    win_target_reached = true;
+                }
+
+                if (win_target_reached) {
+                    symbol_win += 1;
+                    bull_win += 1; 
+
+                    double percent_profit = (j_price = i_price) / i_price;
+                    symbol_profit += percent_profit;
+                    bull_profit += percent_profit;
+                    bull_trade_time += (j - i);
+                    symbol_trade_time += (j - i);
+                    cout << "bull normal win: profit " << percent_profit << " trade time " << (j - i) << endl;                    
+                } else {
+                    if (j_price < i_price - no_day_cross_ret.delta) {
+                        lose_target_reached = true;
+                    }
+
+                    if (lose_target_reached) {
+                        symbol_lose += 1;
+                        bull_lose += 1; 
+
+                        double percent_profit = (j_price = i_price) / i_price;
+                        symbol_profit += percent_profit;
+                        bull_profit += percent_profit;
+                        bull_trade_time += (j - i);
+                        symbol_trade_time += (j - i);
+                        cout << "bull normal lose: profit " << percent_profit << " trade time " << (j - i) << endl;                            
+                    }
+                }
+
+                if (win_target_reached || lose_target_reached)  {
+                    Trade close_trade;
+                    close_trade.symbol = symbol;
+                    close_trade.id = global_trade_id;
+                    close_trade.time = sorted_one_min_candles[j].datetime;
+                    close_trade.price = j_price;
+                    close_trade.bull = true;
+                    close_trade.open = false;
+                    close_trade.delta = no_day_cross_ret.delta;
+                    close_trade.target = no_day_cross_ret.target;
+                    global_trades.push_back(close_trade);
+                    global_trade_id += 1;
+                    break; 
+                }
+                j += 1;    
+                
+            } 
+        } else {
+            auto no_day_cross_ret = no_day_cross(false);
+            if (no_day_cross_ret.hit) {
+                Trade open_trade; 
+            }
+        }
+
         i += 1;
     }
 
@@ -476,8 +582,16 @@ int main(int argc, char* argv[]) {
         }
    
     }    
-     
-     
+    
+    vector<string> all_symbols;
+ 
+    string calc_mode = "hour_end";
+    vector<Trade> global_trades;
+
+    for (const auto & symbol : all_symbols) {
+        analyze_symbol(calc_mode, global_trades, symbol);
+
+    }
 
     std::cout << "Hello, World!" << std::endl;
     return 0;
